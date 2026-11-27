@@ -255,6 +255,11 @@
   @keyframes splline { to { width: 72px; } }
   /* title menu: the live party shows through, darker toward the edges so the card stays readable */
   #startOv { background: radial-gradient(ellipse at center, rgba(8, 10, 28, 0.25) 0%, rgba(8, 10, 28, 0.78) 100%); background-image: none; }
+  #pauseOv { background: rgba(0, 0, 0, 0.62); background-image: none; align-items: center; }
+  #pauseOv .card { background: transparent; border: 0; box-shadow: none; }
+  #pauseOv .card p { color: #fff; font-size: 1.15rem; text-shadow: 0 2px 0 #000; }
+  #pauseOv .card .kicker { color: #ff5d7a; }
+  #pauseOv .card h1 { -webkit-text-stroke-color: #000; text-shadow: 0 7px 0 #000; font-size: clamp(3rem, 13vw, 4.8rem); }
   #overOv { background: rgba(0, 0, 0, 0.62); background-image: none; align-items: center; }
   #overOv .card { background: transparent; border: 0; box-shadow: none; }
   #overOv .card p { color: #fff; font-size: 1.15rem; text-shadow: 0 2px 0 #000; }
@@ -344,7 +349,8 @@
 
   <div class="overlay" id="pauseOv" hidden>
     <div class="card">
-      <h1>PAUSED</h1>
+      <p class="kicker">Taking a break</p>
+      <h1>PAUS<span>ED</span></h1>
       <p id="pauseInfo"></p>
       <button class="go" id="resumeBtn" type="button">RESUME</button>
     </div>
@@ -1886,8 +1892,10 @@
     if (step !== tutorStep) {
       tutorStep = step;
       var a = '', b = '';
-      if (step === 0) { a = (TOUCH ? 'Tap' : 'Press') + ' the letter that shows up'; b = 'Three letters wrap one burger'; placeKey(); }
+      if (step === 0) { a = (TOUCH ? 'Tap' : 'Press') + ' the letter that shows up'; b = 'Three letters wrap one burger'; }
       $('tutorA').textContent = a; $('tutorB').textContent = b;
+      /* only now is the text in place, so its real height is known and the key can be put well below it */
+      if (step === 0) placeKey();
     }
     var show = !(SP.on || OUT.on || doorBusy() || over);
     el.classList.toggle('on', show);
@@ -1918,7 +1926,7 @@
     if (tutorBusy() && tutorStep < 2 && !((SP && SP.on) || (OUT && OUT.on))) {
       /* anywhere from just under the hint text down to the lower part of the screen (the arrow follows the key) */
       var sr0 = stage.getBoundingClientRect(), tb = $('tutor').getBoundingClientRect().bottom - sr0.top;
-      var lo = Math.max(sh * 0.3, tb + 56), hi = sh * 0.78;
+      var lo = Math.max(sh * 0.3, tb + 150), hi = sh * 0.8;
       if (lo > hi - 20) lo = hi - 20;
       ky = lo + Math.random() * (hi - lo);
     }
