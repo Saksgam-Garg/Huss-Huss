@@ -1873,9 +1873,14 @@
     var sx = tr.left + tr.width / 2 - sr.left, sy = tr.bottom - sr.top + 6;
     var kx = kr.left + kr.width / 2 - sr.left, ky = kr.top + kr.height / 2 - sr.top;
     var dx = kx - sx, dy = ky - sy, dist = Math.hypot(dx, dy) || 1, ux = dx / dist, uy = dy / dist;
-    var ex = kx - ux * kr.width * 0.78, ey = ky - uy * kr.width * 0.78;
     var side = dx < 0 ? -1 : 1;
-    var cx = (sx + ex) / 2 - uy * dist * 0.3 * side, cy = (sy + ey) / 2 + ux * dist * 0.3 * side;
+    /* the tip sits just off the key, on a point rotated away from the straight line, and the curve arrives
+       heading exactly at the key's centre so the head points into the key, not past it */
+    var ang = 0.55 * side, vx = -ux, vy = -uy;
+    var wx = vx * Math.cos(ang) - vy * Math.sin(ang), wy = vx * Math.sin(ang) + vy * Math.cos(ang);
+    var r = kr.width * 0.62;
+    var ex = kx + wx * r, ey = ky + wy * r;
+    var cx = ex + wx * dist * 0.4, cy = ey + wy * dist * 0.4;
     var tx = ex - cx, ty = ey - cy, tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
     var L = 26, W = 15, bx = ex - tx * L, by = ey - ty * L;
     var pts = ex + ',' + ey + ' ' + (bx - ty * W) + ',' + (by + tx * W) + ' ' + (bx + ty * W) + ',' + (by - tx * W);
