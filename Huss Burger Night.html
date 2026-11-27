@@ -239,6 +239,11 @@
   @media (max-height: 520px) { #tutor { top: 9%; } #tutor b { font-size: 1.9rem; -webkit-text-stroke-width: 7px; } #tutor span { display: none; } }
 
   /* game over: the frozen game stays visible under a translucent black layer, with the words on top */
+  /* first screen: all black until the first click, which is what lets the browser play sound */
+  #gate { z-index: 30; background: #000; background-image: none; cursor: pointer; transition: opacity 0.5s ease; }
+  #gate.out { opacity: 0; pointer-events: none; }
+  #gate span { margin: auto; font-family: var(--font-display); color: #fff; text-align: center; font-size: clamp(2rem, 8vw, 4.6rem); letter-spacing: 0.08em; text-transform: uppercase; animation: gatepulse 1.6s ease-in-out infinite; }
+  @keyframes gatepulse { 0%, 100% { opacity: 0.45; } 50% { opacity: 1; } }
   /* credit screen: plain dark, small spaced caps over a clean name, a thin accent line, slow fades */
   #splash { background: #06070d; background-image: none; transition: opacity 0.7s ease; align-items: center; }
   #splash .st { margin: auto; display: flex; flex-direction: column; align-items: center; gap: 14px; transform: none; -webkit-text-stroke: 0; text-shadow: none; animation: splfade 0.9s ease both; font-family: inherit; color: #fff; }
@@ -311,6 +316,8 @@
       <p class="hint" id="hint">Press the letter. <b>Next: lay the foil.</b></p>
     </div>
   </div>
+
+  <div class="overlay" id="gate" role="button" tabindex="0" aria-label="Click to start"><span id="gateT">Click to start</span></div>
 
   <div class="overlay" id="startOv">
     <button class="tb corner" id="muteTitle" type="button" aria-label="Sound" style="--c:#ff3fe0;--d:#a800a0"><svg class="on" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 8.5q3 3.5 0 7M18.5 6q5 6 0 12" fill="none" stroke-width="2" stroke-linecap="round"/></svg><svg class="off" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 9l6 6M22 9l-6 6" fill="none" stroke-width="2.2" stroke-linecap="round"/></svg></button>
@@ -1885,7 +1892,7 @@
     el.classList.toggle('on', show);
     tutorArrow(show && tutorStep === 0);
   }
-  $('againBtn').addEventListener('click', function () { try { window.location.reload(); } catch (e) {} });
+  $('againBtn').addEventListener('click', function () { resetGame(); });
   /* tapping or clicking the stage somewhere with no key nearby costs a heart */
   stage.addEventListener('pointerdown', function (e) {
     if (e.target && e.target.closest && e.target.closest('button')) return;
@@ -1974,12 +1981,7 @@
     splashing = true;
     initAudio();
     $('startOv').hidden = true;
-    var sp = $('splash');
-    sp.classList.remove('out');
-    sp.hidden = false;
-    /* the cutscene and its voice start as the credit begins to fade, so nothing plays silently underneath */
-    setTimeout(function () { sp.classList.add('out'); begin(); }, 2300);
-    setTimeout(function () { sp.hidden = true; }, 3100);
+    begin();
   });
 
   /* ---------- a friend bursts through the front door; the camera cuts to the door ---------- */
@@ -2609,7 +2611,7 @@
     var dt = Math.min(0.05, t - last);
     last = t;
 
-    var clock = (ac && epochSet) ? Math.max(0, ac.currentTime - epoch) : t;
+    var clock = (ac && epochSet && ac.state === 'running') ? Math.max(0, ac.currentTime - epoch) : t;
     var ph = clock / BEAT * Math.PI * 2;
     var bp = (clock % BEAT) / BEAT;
     var kickEnv = Math.exp(-bp * 5);
@@ -2737,6 +2739,69 @@
     renderer.render(scene, camera);
   }
 
+  /* ---------- PLAY AGAIN: reset everything in place (no page reload, so the music never stops) ---------- */
+  var baseDancers = dancers.length, baseSpawn = spawnIndex;
+  function resetGame() {
+    /* screens and pause state */
+    over = false; paused = false;
+    $('overOv').hidden = true; $('pauseOv').hidden = true;
+    try { if (ac) ac.resume(); } catch (e) {}
+    /* packing: back to an empty counter */
+    clicks = 0; wv = 0; done = 0; packed = 0; squash = 0; restock = 1; closeHold = 0; closeBlend = 0;
+    stamps.length = 0;
+    countEl.textContent = '0'; rateEl.textContent = '0.0 burgers per second';
+    captionEl.textContent = 'Everyone is out partying. You have burgers to pack.';
+    launches.forEach(function (l) { scene.remove(l.m); }); launches.length = 0;
+    for (var pi = 0; pi < pile.length; pi++) { if (pile[pi]) { scene.remove(pile[pi]); pile[pi] = null; } }
+    pileCount = 0;
+    /* the crowd that joined during the last game leaves again */
+    for (var di = dancers.length - 1; di >= baseDancers; di--) { scene.remove(dancers[di].g); dancers.splice(di, 1); }
+    spawnIndex = baseSpawn;
+    /* hearts, hints, key cap, best score */
+    lives = 3; renderHearts(); prevBest = best; showBest();
+    $('hearts').classList.remove('hit'); $('hurt').classList.remove('on');
+    tutorOn = null; tutorStep = -2;
+    $('tutor').classList.remove('on'); $('tutorArrow').classList.remove('on');
+    lastLetter = ''; nextLetter();
+    renderSteps();
+    /* hands */
+    handLow = 0;
+    handR.pos.copy(REST_R); handL.pos.copy(REST_L);
+    handR.g.visible = false; handL.g.visible = false;
+    /* sauce spill: bottle upright, puddle, sponge and droplets gone */
+    SP.on = false; SP.phase = 0; SP.t = 0; SP.next = 12; SP.left = SP.need; SP.off = -0.3; SP.from = -0.3; SP.to = -0.3; SP.swipeT = 9; SP.keepClose = false;
+    puddle.visible = false; sponge.visible = false;
+    bottle.rotation.z = 0; bottle.position.y = COUNTER_Y;
+    dropl.forEach(function (d) { d.m.visible = false; });
+    spillEl.classList.remove('on'); keySpillWas = false;
+    /* blackout: lights back on straight away */
+    OUT.on = false; OUT.t = 0; OUT.dark = 0; OUT.next = 42; outFlag = [false, false, false];
+    outEl.classList.remove('on', 'two');
+    /* the friend goes back to his spot on the dance floor, the door is shut */
+    fState = 0; fT = 0; fRun = 0; fNext = 22 + Math.random() * 10; fDoor = 0; doorT = 0; fDucked = false; fSpeakT = -1; fCutDone = false;
+    doorBlend = 0; partyBlend = 0; fwdBlend = 0;
+    doorHinge.rotation.y = 0; doorLight.intensity = 0;
+    if (friend) {
+      friend.ctrl = false;
+      friend.g.position.set(F_HOME.x, 0.06, F_HOME.z);
+      friend.g.rotation.y = 0; friend.g.scale.setScalar(DANCER_SCALE);
+      friend.tg.rotation.y = 0;
+      if (friend.mouth) friend.mouth.visible = false;
+      if (friend.smile) friend.smile.visible = true;
+      friend.born = performance.now() / 1000 - 10;
+    }
+    subtitle('');
+    /* the granny goes back to her spot, the sign is put away */
+    GR.on = false; GR.s = 0; GR.t = 0; GR.next = 30; GR.taps = 0;
+    granny.ctrl = false;
+    granny.g.position.set(G_HOME.x, 0.06, G_HOME.z);
+    granny.g.rotation.y = 0; granny.g.scale.setScalar(DANCER_SCALE);
+    granny.armR.rotation.x = 0; granny.armL.rotation.x = 0;
+    gSign.visible = false; ripple.visible = false;
+    /* music: back to the normal level */
+    if (bgmGain && ac) bgmGain.gain.setTargetAtTime(0.5, ac.currentTime, 0.3);
+  }
+
   fitCamera();
   renderSteps();
   if (window.ResizeObserver) new ResizeObserver(fitCamera).observe(stage);
@@ -2745,6 +2810,31 @@
   initAudio();
   startParty();
   loadVoice();
+  /* the black 'click to start' screen: the first click wakes the sound, then the menu fades in */
+  var gateEl = $('gate'), gateGone = false;
+  if (TOUCH) $('gateT').textContent = 'Tap to start';
+  function openGate() {
+    if (gateGone) return;
+    gateGone = true;
+    try { if (ac) ac.resume(); } catch (e) {}
+    startParty();
+    /* the credit screen shows first, then fades into the main menu */
+    var sp = $('splash');
+    sp.classList.remove('out');
+    sp.hidden = false;
+    gateEl.classList.add('out');
+    setTimeout(function () { gateEl.hidden = true; }, 520);
+    setTimeout(function () { sp.classList.add('out'); }, 2500);
+    setTimeout(function () { sp.hidden = true; }, 3300);
+  }
+  gateEl.addEventListener('pointerdown', openGate);
+  gateEl.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openGate(); } });
+  document.addEventListener('keydown', function () { if (!gateGone) openGate(); });
+  /* if the browser already lets us play sound (for example after PLAY AGAIN), skip the black screen: ask for sound, and if it is running a moment later, open straight to the menu */
+  function autoOpen() { if (!gateGone && ac && ac.state === 'running') openGate(); }
+  try { if (ac) { ac.resume(); ac.addEventListener('statechange', autoOpen); } } catch (e) {}
+  setTimeout(autoOpen, 300);
+  setTimeout(autoOpen, 800);
   function wakeAudio() { if (ac && ac.state === 'suspended' && !paused) { try { ac.resume(); } catch (e) {} } }
   ['pointerdown', 'keydown', 'touchstart', 'mousedown'].forEach(function (ev) { document.addEventListener(ev, wakeAudio, true); });
   frame();
